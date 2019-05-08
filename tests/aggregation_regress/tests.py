@@ -1,5 +1,6 @@
 import datetime
 import pickle
+import warnings
 from decimal import Decimal
 from operator import attrgetter
 from unittest import mock
@@ -109,6 +110,25 @@ class AggregationTests(TestCase):
     def assertObjectAttrs(self, obj, **kwargs):
         for attr, value in kwargs.items():
             self.assertEqual(getattr(obj, attr), value)
+
+    def test_meta_ordering_deprecation_warning(self):
+        Book._meta.ordering = ['name', F('price').asc()]
+        with warnings.catch_warnings(record=True) as warns:
+            warnings.simplefilter('always')
+            list(Book.objects.filter(
+                name='Practical Django Projects',
+            ).annotate(
+                discount_price=F('price') * 2,
+            ).values(
+                'discount_price',
+            ).annotate(sum_discount=Sum('discount_price')))
+
+        self.assertEqual(len(warns), 1)
+        self.assertEqual(
+            str(warns[0].message),
+            "Book QuerySet won't use Meta.ordering in Django 3.1. "
+            "Add .order_by('name', OrderBy(F('price'), descending=False)) to retain the current query."
+        )
 
     @ignore_warnings(category=RemovedInDjango31Warning)
     def test_annotation_with_value(self):
